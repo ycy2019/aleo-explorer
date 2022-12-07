@@ -71,7 +71,8 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request,
                              light_node_state=self.light_node_state)
-            await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
+            # await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
+            await self.node.connect(os.environ.get("NODE_URL", "https://vm.aleo.org/api"))
             asyncio.create_task(webui.run(self.light_node_state))
             asyncio.create_task(api.run())
             while True:

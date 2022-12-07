@@ -17,17 +17,17 @@ class RESTNode:
         self.explorer_request = explorer_request
         self.light_node_state = light_node_state
 
-    async def connect(self, host: str, port: int):
+    async def connect(self, host: str):
         # return
-        self.worker_task = asyncio.create_task(self.worker(host, port))
+        self.worker_task = asyncio.create_task(self.worker(host))
         # self.light_node_state.connect("127.0.0.1", 4133)
 
-    async def worker(self, host: str, port: int):
+    async def worker(self, host: str):
         async with aiohttp.ClientSession() as session:
             while True:
                 await asyncio.sleep(5)
                 try:
-                    async with session.get(f"{os.environ.get('PROTOCOL', 'http')}://{host}:{port}/testnet3/latest/height") as resp:
+                    async with session.get(f"{host}/testnet3/latest/height") as resp:
                         if not resp.ok:
                             print("failed to get latest height")
                             continue
@@ -38,7 +38,7 @@ class RESTNode:
                             start = local_height + 1
                             end = min(start + 50, latest_height + 1)
                             print(f"fetching blocks {start} to {end - 1}")
-                            async with session.get(f"{os.environ.get('PROTOCOL', 'http')}://{host}:{port}/testnet3/blocks?start={start}&end={end}") as block_resp:
+                            async with session.get(f"{host}/testnet3/blocks?start={start}&end={end}") as block_resp:
                                 if not block_resp.ok:
                                     print("failed to get blocks")
                                     continue
