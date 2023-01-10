@@ -642,7 +642,10 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT * FROM leaderboard ORDER BY total_incentive DESC LIMIT $1 OFFSET $2", end - start, start
+                    "SELECT * FROM leaderboard "
+                    "ORDER BY total_incentive DESC, total_reward DESC "
+                    "LIMIT $1 OFFSET $2",
+                    end - start, start
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -665,12 +668,13 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
-                    "reward, cs.target_sum as target_sum "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
                     "FROM partial_solution ps "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ps.address = $1 ORDER BY b.height DESC LIMIT 30 ",
+                    "WHERE ps.address = $1 "
+                    "ORDER BY cs.id DESC "
+                    "LIMIT 30",
                     address
                 )
             except Exception as e:
@@ -693,12 +697,13 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
-                    "reward, cs.target_sum as target_sum "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
                     "FROM partial_solution ps "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ps.address = $1 ORDER BY b.height DESC LIMIT $2 OFFSET $3",
+                    "WHERE ps.address = $1 "
+                    "ORDER BY cs.id DESC "
+                    "LIMIT $2 OFFSET $3",
                     address, end - start, start
                 )
             except Exception as e:
@@ -740,7 +745,7 @@ class Database:
     async def get_address_speed(self, address: str) -> (float, int): # (speed, interval)
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
-            interval_list = [900, 1800, 3600, 14400, 86400]
+            interval_list = [900, 1800, 3600, 14400, 43200, 86400]
             now = int(time.time())
             try:
                 for interval in interval_list:
@@ -846,6 +851,16 @@ class Database:
                             "WHERE b.height = $1", height
                         )
                         await conn.execute("UPDATE coinbase_solution SET target_sum = $1 WHERE id = $2", target_sum, coinbase_solution_id)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    # debug method
+    async def clear_database(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("TRUNCATE TABLE block CASCADE")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

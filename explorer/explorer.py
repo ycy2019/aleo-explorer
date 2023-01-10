@@ -1,6 +1,7 @@
 import asyncio
 import os
 import traceback
+from sys import stdout
 
 import api
 import webui
@@ -23,6 +24,7 @@ class Explorer:
                            message_callback=self.message)
 
         # states
+        self.dev_mode = False
         self.latest_height = 0
         self.latest_block_hash = Testnet3.genesis_block.block_hash
         self.db_lock = asyncio.Lock()
@@ -65,14 +67,13 @@ class Explorer:
     async def main_loop(self):
         try:
             await self.db.connect()
+            await self.check_dev_mode()
             await self.check_genesis()
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
             print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,
-                             light_node_state=self.light_node_state)
-            # await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
-            await self.node.connect(os.environ.get("NODE_URL", "https://vm.aleo.org/api"))
+            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
+            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             asyncio.create_task(webui.run(self.light_node_state))
             asyncio.create_task(api.run())
             while True:
@@ -106,15 +107,32 @@ class Explorer:
         if block is Testnet3.genesis_block:
             await self.db.save_block(block)
             return
-        # if block.previous_hash != self.latest_block_hash:
-        #     print(f"ignoring block {block} because previous block hash does not match")
+        if not self.dev_mode and block.previous_hash != self.latest_block_hash:
+            print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
             await self.db.save_block(block)
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash
 
-
-
     async def get_latest_block(self):
         return await self.db.get_latest_block()
+
+    async def check_dev_mode(self):
+        try:
+            with open("/tmp/explorer_dev_mode", "rb") as f:
+                from hashlib import md5
+                if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
+                    self.dev_mode = True
+                    i = 10
+                    while i > 0:
+                        print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
+                        stdout.flush()
+                        await asyncio.sleep(1)
+                        i -= 1
+                    print("\x1b[G\x1b[2K!!! Clearing database now !!!")
+                    stdout.flush()
+                    await self.db.clear_database()
+        except:
+            pass
+
